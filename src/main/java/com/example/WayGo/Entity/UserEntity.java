@@ -40,6 +40,15 @@ public class UserEntity {
     @Enumerated(EnumType.STRING)
     private UserRole role;
 
+    // 프로필 사진 URL
+    @Column(name = "profile_image_url")
+    private String profileImageUrl;
+
+    // 배경 사진 URL
+    @Column(name = "background_image_url")
+    private String backgroundImageUrl;
+
+
     @PrePersist
     public void prePersist() {
         this.role = this.role == null ? UserRole.USER : this.role;
@@ -49,5 +58,25 @@ public class UserEntity {
     // 이메일 인증 완료 메서드
     public void verifyEmail() {
         this.emailVerified = true;
+    }
+
+    // 프로필 사진 업데이트
+    public void updateProfileImage(String profileImageUrl) {
+        this.profileImageUrl = profileImageUrl;
+    }
+
+    // 배경 사진 업데이트
+    public void updateBackgroundImage(String backgroundImageUrl) {
+        this.backgroundImageUrl = backgroundImageUrl;
+    }
+
+    // 비밀번호 변경
+    public void updatePassword(String newPassword) {
+        this.password = newPassword;
+    }
+
+    // 닉네임 변경
+    public void updateNickname(String nickname) {
+        this.nickname = nickname;
     }
 }

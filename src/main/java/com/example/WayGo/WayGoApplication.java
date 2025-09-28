@@ -9,5 +9,4 @@ public class WayGoApplication {
 	public static void main(String[] args) {
 		SpringApplication.run(WayGoApplication.class, args);
 	}
-
 }

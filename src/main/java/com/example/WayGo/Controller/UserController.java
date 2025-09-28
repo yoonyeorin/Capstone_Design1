@@ -569,4 +569,141 @@ public class UserController {
 
         return ResponseEntity.ok(response);
     }
+
+    /**
+     * 비밀번호 변경
+     */
+    @Operation(summary = "비밀번호 변경", description = "현재 비밀번호를 확인하고 새로운 비밀번호로 변경합니다.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "비밀번호 변경 성공"),
+            @ApiResponse(responseCode = "400", description = "입력값 오류 또는 비밀번호 불일치"),
+            @ApiResponse(responseCode = "401", description = "인증되지 않은 사용자")
+    })
+    @PutMapping("/change-password")
+    public ResponseEntity<Map<String, Object>> changePassword(
+            @Valid @RequestBody ChangePasswordRequest request,
+            HttpSession session,
+            BindingResult bindingResult) {
+
+        Long userId = (Long) session.getAttribute("userId");
+
+        if (userId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
+                    "success", false,
+                    "message", "로그인이 필요합니다."
+            ));
+        }
+
+        // 유효성 검사 오류 처리
+        if (bindingResult.hasErrors()) {
+            String errorMessage = bindingResult.getFieldErrors().stream()
+                    .map(FieldError::getDefaultMessage)
+                    .findFirst()
+                    .orElse("입력값을 확인해주세요.");
+
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", errorMessage
+            ));
+        }
+
+        // 새 비밀번호와 확인 비밀번호 일치 확인
+        if (!request.getNewPassword().equals(request.getNewPasswordCheck())) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "새 비밀번호가 일치하지 않습니다."
+            ));
+        }
+
+        try {
+            boolean success = userService.changePassword(userId, request);
+
+            if (success) {
+                log.info("비밀번호 변경 성공: userId={}", userId);
+                return ResponseEntity.ok(Map.of(
+                        "success", true,
+                        "message", "비밀번호가 성공적으로 변경되었습니다."
+                ));
+            } else {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "success", false,
+                        "message", "현재 비밀번호가 일치하지 않습니다."
+                ));
+            }
+
+        } catch (Exception e) {
+            log.error("비밀번호 변경 중 오류: userId={}, error={}", userId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "success", false,
+                    "message", "비밀번호 변경 중 오류가 발생했습니다."
+            ));
+        }
+    }
+
+    /**
+     * 닉네임 변경
+     */
+    @Operation(summary = "닉네임 변경", description = "사용자의 닉네임을 변경합니다.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "닉네임 변경 성공"),
+            @ApiResponse(responseCode = "400", description = "입력값 오류 또는 중복된 닉네임"),
+            @ApiResponse(responseCode = "401", description = "인증되지 않은 사용자")
+    })
+    @PutMapping("/change-nickname")
+    public ResponseEntity<Map<String, Object>> changeNickname(
+            @Valid @RequestBody ChangeNicknameRequest request,
+            HttpSession session,
+            BindingResult bindingResult) {
+
+        Long userId = (Long) session.getAttribute("userId");
+
+        if (userId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
+                    "success", false,
+                    "message", "로그인이 필요합니다."
+            ));
+        }
+
+        // 유효성 검사 오류 처리
+        if (bindingResult.hasErrors()) {
+            String errorMessage = bindingResult.getFieldErrors().stream()
+                    .map(FieldError::getDefaultMessage)
+                    .findFirst()
+                    .orElse("입력값을 확인해주세요.");
+
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", errorMessage
+            ));
+        }
+
+        try {
+            boolean success = userService.changeNickname(userId, request);
+
+            if (success) {
+                // 세션의 사용자 정보도 업데이트 (필요한 경우)
+                UserEntity updatedUser = userService.getLoginUserById(userId);
+
+                log.info("닉네임 변경 성공: userId={}, newNickname={}", userId, request.getNickname());
+                return ResponseEntity.ok(Map.of(
+                        "success", true,
+                        "message", "닉네임이 성공적으로 변경되었습니다.",
+                        "newNickname", request.getNickname()
+                ));
+            } else {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "success", false,
+                        "message", "이미 사용중인 닉네임이거나 기존과 동일한 닉네임입니다."
+                ));
+            }
+
+        } catch (Exception e) {
+            log.error("닉네임 변경 중 오류: userId={}, error={}", userId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "success", false,
+                    "message", "닉네임 변경 중 오류가 발생했습니다."
+            ));
+        }
+    }
+
 }
