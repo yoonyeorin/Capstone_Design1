@@ -36,3 +36,9 @@ out/
 ### VS Code ###
 .vscode/
 
+# 설정 파일 제외
+src/main/resources/application.properties
+
+# 기타 민감한 설정 파일들
+application-*.properties
+*.env
