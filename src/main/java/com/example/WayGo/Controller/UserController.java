@@ -21,6 +21,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.annotation.*;
+import com.example.WayGo.Service.LikeService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -36,6 +40,7 @@ public class UserController {
 
     private final UserService userService;
     private final EmailService emailService;
+    private final LikeService likeService;
 
     /**
      * 아이디 중복 확인
@@ -702,6 +707,57 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                     "success", false,
                     "message", "닉네임 변경 중 오류가 발생했습니다."
+            ));
+        }
+    }
+
+    /**
+     * 내가 좋아요한 게시글 목록 조회
+     */
+    @Operation(summary = "좋아요한 게시글 조회", description = "현재 로그인한 사용자가 좋아요한 게시글 목록을 조회합니다.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "조회 성공"),
+            @ApiResponse(responseCode = "401", description = "인증되지 않은 사용자")
+    })
+    @GetMapping("/liked-posts")
+    public ResponseEntity<Map<String, Object>> getLikedPosts(
+            @Parameter(description = "페이지 번호", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "페이지 크기", example = "10")
+            @RequestParam(defaultValue = "10") int size,
+            HttpSession session) {
+
+        Long userId = (Long) session.getAttribute("userId");
+
+        if (userId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
+                    "success", false,
+                    "message", "로그인이 필요합니다."
+            ));
+        }
+
+        try {
+            Pageable pageable = PageRequest.of(page, size);
+            Page<LikedPostResponse> likedPosts = likeService.getUserLikedPosts(userId, pageable);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("data", Map.of(
+                    "content", likedPosts.getContent(),
+                    "totalElements", likedPosts.getTotalElements(),
+                    "totalPages", likedPosts.getTotalPages(),
+                    "currentPage", likedPosts.getNumber(),
+                    "size", likedPosts.getSize()
+            ));
+
+            log.info("좋아요한 게시글 조회 성공: userId={}, count={}", userId, likedPosts.getTotalElements());
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("좋아요한 게시글 조회 중 오류: userId={}, error={}", userId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "success", false,
+                    "message", "좋아요한 게시글 조회 중 오류가 발생했습니다."
             ));
         }
     }

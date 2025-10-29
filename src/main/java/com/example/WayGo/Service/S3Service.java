@@ -10,6 +10,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.UUID;
 import java.util.Arrays;
 import java.util.List;
@@ -45,6 +46,31 @@ public class S3Service {
      */
     public String uploadBackgroundImage(MultipartFile file, Long userId) throws IOException {
         return uploadImage(file, "background", userId);
+    }
+
+    /**
+     * 게시글 이미지 업로드
+     */
+    public String uploadPostImage(MultipartFile file, Long userId) throws IOException {
+        return uploadImage(file, "posts", userId);
+    }
+
+    /**
+     * 여러 게시글 이미지 업로드
+     */
+    public List<String> uploadPostImages(List<MultipartFile> files, Long userId) throws IOException {
+        List<String> imageUrls = new ArrayList<>();
+
+        if (files != null) {
+            for (MultipartFile file : files) {
+                if (file != null && !file.isEmpty()) {
+                    String imageUrl = uploadPostImage(file, userId);
+                    imageUrls.add(imageUrl);
+                }
+            }
+        }
+
+        return imageUrls;
     }
 
     /**
