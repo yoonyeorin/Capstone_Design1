@@ -9,7 +9,6 @@ import com.google.cloud.translate.v3.TranslationServiceClient;
 import com.google.cloud.translate.v3.TranslationServiceSettings;
 import com.google.cloud.vision.v1.ImageAnnotatorClient;
 import com.google.cloud.vision.v1.ImageAnnotatorSettings;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -31,7 +30,7 @@ public class GoogleCloudConfig {
 
     /**
      * 생성자 주입 방식
-     * @Value 어노테이션으로 application.properties 값을 주입받음
+     * Value 어노테이션으로 application.properties 값을 주입받음
      */
     public GoogleCloudConfig(
             @Value("${google.cloud.credentials.location}") String credentialsPath,
