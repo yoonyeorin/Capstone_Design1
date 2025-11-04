@@ -36,9 +36,14 @@ out/
 ### VS Code ###
 .vscode/
 
-# 설정 파일 제외
+### Secret Files ###
+# 설정 파일
 src/main/resources/application.properties
-
-# 기타 민감한 설정 파일들
+application_secret.properties
 application-*.properties
 *.env
+
+# Google Cloud 인증 파일
+src/main/resources/google-api-key.json
+src/main/resources/*-key.json
+src/main/resources/*credentials*.json
