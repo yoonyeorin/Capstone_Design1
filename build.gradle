@@ -18,10 +18,6 @@ configurations {
 	compileOnly {
 		extendsFrom annotationProcessor
 	}
-	// Guava 충돌 방지
-	all {
-		exclude group: 'com.google.guava', module: 'listenablefuture'
-	}
 }
 
 repositories {
@@ -33,7 +29,6 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
-
 	// 이메일 발송
 	implementation 'org.springframework.boot:spring-boot-starter-mail'
 	// AWS S3 의존성 추가
@@ -48,26 +43,6 @@ dependencies {
 
 	// Springdoc OpenAPI 추가 (Spring Boot 3.x 호환)
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.2.0'
-
-	// Google Cloud APIs (BOM으로 버전 관리)
-	implementation platform('com.google.cloud:libraries-bom:26.32.0')
-	implementation 'com.google.cloud:google-cloud-translate'
-	implementation 'com.google.cloud:google-cloud-speech'
-	implementation 'com.google.cloud:google-cloud-vision'
-
-	// Guava 명시적 설정 (충돌 방지)
-	implementation('com.google.guava:guava:32.1.3-jre') {
-		exclude group: 'com.google.guava', module: 'listenablefuture'
-	}
-
-	// WebFlux & Commons IO
-	implementation 'org.springframework.boot:spring-boot-starter-webflux'
-	implementation 'commons-io:commons-io:2.11.0'
-
-
-	implementation("com.google.cloud:google-cloud-speech:4.40.0")          // STT
-	implementation("com.google.cloud:google-cloud-texttospeech:2.48.0")    // TTS
-	implementation("com.google.cloud:google-cloud-vision:3.50.0")          // OCR
 }
 
 tasks.named('test') {
