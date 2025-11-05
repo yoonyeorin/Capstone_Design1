@@ -18,10 +18,6 @@ configurations {
 	compileOnly {
 		extendsFrom annotationProcessor
 	}
-	// Guava 충돌 방지
-	all {
-		exclude group: 'com.google.guava', module: 'listenablefuture'
-	}
 }
 
 repositories {
@@ -33,7 +29,6 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
-
 	// 이메일 발송
 	implementation 'org.springframework.boot:spring-boot-starter-mail'
 	// AWS S3 의존성 추가
@@ -48,7 +43,6 @@ dependencies {
 
 	// Springdoc OpenAPI 추가 (Spring Boot 3.x 호환)
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.2.0'
-
 
 
 	// WebFlux & Commons IO
