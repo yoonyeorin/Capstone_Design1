@@ -21,6 +21,6 @@ public interface LikeRepository extends JpaRepository<LikeEntity, Long> {
     long countByPostId(Long postId);
 
     // 사용자가 좋아요한 게시글 목록 (게시글 정보 포함)
-    @Query("SELECT l FROM LikeEntity l JOIN FETCH l.post p JOIN FETCH p.author ORDER BY l.createdAt DESC")
+    @Query("SELECT l FROM LikeEntity l JOIN FETCH l.post p JOIN FETCH p.author WHERE l.user.id = :userId ORDER BY p.createdAt DESC")
     Page<LikeEntity> findByUserIdWithPost(@Param("userId") Long userId, Pageable pageable);
 }
