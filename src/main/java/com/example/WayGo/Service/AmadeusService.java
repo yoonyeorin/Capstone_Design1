@@ -1,6 +1,9 @@
 package com.example.WayGo.Service;
 
 import com.example.WayGo.Dto.TrendingCityDTO;
+import com.example.WayGo.Dto.Translation.TextTranslationRequest;
+import com.example.WayGo.Dto.Translation.TranslationResponse;
+import com.example.WayGo.Service.Translation.TranslateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,6 +23,7 @@ import java.util.stream.Collectors;
 public class AmadeusService {
 
     private final RestTemplate restTemplate;
+    private final TranslateService translateService; // 번역 서비스 추가
 
     @Value("${amadeus.api.key}")
     private String apiKey;
@@ -111,9 +115,25 @@ public class AmadeusService {
                 Map<String, Object> locations = dictionaries != null ?
                         (Map<String, Object>) dictionaries.get("locations") : new HashMap<>();
 
-                return data.stream()
-                        .limit(10)
+                // ✅ 중복 도시 제거: cityCode 기준으로 고유한 도시만 선택
+                // 같은 도시가 여러 번 나오면 가장 높은 점수(=가장 저렴한 가격)를 가진 항목만 유지
+                Map<String, TrendingCityDTO> uniqueCities = new LinkedHashMap<>();
+
+                data.stream()
                         .map(item -> convertFlightDestinationToDTO(item, locations))
+                        .forEach(dto -> {
+                            String cityCode = dto.getCityCode();
+                            // 이미 존재하는 도시면 점수 비교 후 높은 것만 유지
+                            if (!uniqueCities.containsKey(cityCode) ||
+                                    uniqueCities.get(cityCode).getTravelScore() < dto.getTravelScore()) {
+                                uniqueCities.put(cityCode, dto);
+                            }
+                        });
+
+                // 점수 순으로 정렬 후 Top 10 반환
+                return uniqueCities.values().stream()
+                        .sorted((a, b) -> b.getTravelScore().compareTo(a.getTravelScore()))
+                        .limit(10)
                         .collect(Collectors.toList());
             }
 
@@ -132,37 +152,18 @@ public class AmadeusService {
     private TrendingCityDTO convertFlightDestinationToDTO(Map<String, Object> data, Map<String, Object> locations) {
         String cityCode = (String) data.get("destination");
 
-        // 1단계: IATA 코드 → 영문 도시명
-        String englishCityName = cityCode; // 기본값
-        if (locations != null && locations.containsKey(cityCode)) {
-            Map<String, Object> locationInfo = (Map<String, Object>) locations.get(cityCode);
-            String detailedName = (String) locationInfo.get("detailedName");
-            if (detailedName != null) {
-                // "ADOLFO SUAREZ BARAJAS" → "Madrid" 형태로 변환
-                englishCityName = extractCityName(detailedName, cityCode);
-            }
-        }
+        // cityCode → [한글 도시명, 국가명] 변환
+        // locations 정보를 함께 전달하여 풀네임 추출 가능하게 함
+        String[] cityInfo = getCityFullName(cityCode, locations);
 
-        // 2단계: 수동 매핑 확인 (가장 빠름)
-        Map<String, String[]> cityMapping = getCityMapping();
-        String[] cityInfo;
-
-        if (cityMapping.containsKey(cityCode)) {
-            cityInfo = cityMapping.get(cityCode);
-        } else {
-            // 3단계: 팀원1의 번역 기능 사용 (옵션)
-            // String koreanName = translationService.translateToKorean(englishCityName);
-            cityInfo = new String[]{englishCityName, "Unknown"};
-        }
-
-        // 가격 정보로 인기도 점수 계산 (가격이 낮을수록 인기)
-        Integer travelScore = 80; // 기본 점수
+        // 가격 정보로 인기도 점수 계산
+        Integer travelScore = 80;
         try {
             Map<String, Object> price = (Map<String, Object>) data.get("price");
             if (price != null && price.containsKey("total")) {
                 String totalStr = String.valueOf(price.get("total"));
                 Double total = Double.parseDouble(totalStr);
-                travelScore = Math.max(100 - (total.intValue() / 10), 50); // 간단한 점수 계산
+                travelScore = Math.max(100 - (total.intValue() / 10), 50);
             }
         } catch (Exception e) {
             log.warn("가격 정보 파싱 실패: {}", e.getMessage());
@@ -177,24 +178,301 @@ public class AmadeusService {
     }
 
     /**
-     * 공항명에서 도시명 추출
+     * IATA 도시 코드를 한글 도시명과 국가명으로 변환
+     * @param cityCode IATA 코드
+     * @param locations Amadeus API의 locations 딕셔너리
+     * @return [한글 도시명, 국가명] 배열
+     */
+    private String[] getCityFullName(String cityCode, Map<String, Object> locations) {
+        Map<String, String[]> cityMapping = getCityMapping();
+
+        // 1단계: 수동 매핑에 있으면 바로 반환
+        if (cityMapping.containsKey(cityCode)) {
+            log.debug("수동 매핑 사용: {} -> {}", cityCode, cityMapping.get(cityCode)[0]);
+            return cityMapping.get(cityCode);
+        }
+
+        // 2단계: Amadeus API의 locations에서 영문 도시명 + 국가 코드 추출
+        String englishCityName = cityCode;
+        String countryCode = "Unknown";
+
+        if (locations != null && locations.containsKey(cityCode)) {
+            Map<String, Object> locationInfo = (Map<String, Object>) locations.get(cityCode);
+
+            // countryCode 추출
+            if (locationInfo.containsKey("countryCode")) {
+                countryCode = (String) locationInfo.get("countryCode");
+                log.debug("locations에서 국가 코드 추출: {} -> {}", cityCode, countryCode);
+            }
+
+            String detailedName = (String) locationInfo.get("detailedName");
+            if (detailedName != null) {
+                // 공항명 → 도시명 변환 (매핑 테이블 사용)
+                englishCityName = extractCityName(detailedName, cityCode);
+                log.debug("API에서 도시명 추출: {} -> {}", cityCode, englishCityName);
+            }
+        } else {
+            // locations에 정보가 없는 경우
+            log.warn("locations에 {} 정보 없음", cityCode);
+        }
+
+        // ✅ countryCode가 Unknown이면 cityCode로 국가 추론
+        if (countryCode.equals("Unknown")) {
+            countryCode = inferCountryFromCityCode(cityCode);
+            log.info("cityCode로 국가 추론: {} -> {}", cityCode, countryCode);
+        }
+
+        // 3단계: Google Translation API로 번역 + 국가명 변환
+        try {
+            String koreanCityName = translateToKorean(englishCityName);
+            String koreanCountryName = translateCountryCode(countryCode);
+
+            log.info("번역 완료: {} -> {}, {} -> {}",
+                    englishCityName, koreanCityName, countryCode, koreanCountryName);
+
+            return new String[]{koreanCityName, koreanCountryName};
+
+        } catch (Exception e) {
+            log.warn("번역 실패 ({}): {}. 영문 그대로 사용", englishCityName, e.getMessage());
+            return new String[]{englishCityName, translateCountryCode(countryCode)};
+        }
+    }
+    /**
+     * 공항/도시 코드로 국가 코드 추론
+     * locations에 정보가 없거나 countryCode가 없을 때 사용
+     */
+    private String inferCountryFromCityCode(String cityCode) {
+        Map<String, String> cityToCountry = new HashMap<>();
+
+        // ✅ 주요 공항/도시 → 국가 코드 매핑
+        cityToCountry.put("MAD", "ES");  // 마드리드 → 스페인
+        cityToCountry.put("BCN", "ES");  // 바르셀로나 → 스페인
+        cityToCountry.put("FCO", "IT");  // 로마 피우미치노 → 이탈리아
+        cityToCountry.put("LIN", "IT");  // 밀라노 리나테 → 이탈리아
+        cityToCountry.put("CDG", "FR");  // 파리 샤를드골 → 프랑스
+        cityToCountry.put("ORY", "FR");  // 파리 오를리 → 프랑스
+        cityToCountry.put("XPG", "FR");  // 파리 북역 → 프랑스
+        cityToCountry.put("XYD", "FR");  // 리옹 → 프랑스
+        cityToCountry.put("LIS", "PT");  // 리스본 → 포르투갈
+        cityToCountry.put("OPO", "PT");  // 포르투 → 포르투갈
+        cityToCountry.put("FRA", "DE");  // 프랑크푸르트 → 독일
+        cityToCountry.put("TUN", "TN");  // 튀니스 → 튀니지
+        cityToCountry.put("RAK", "MA");  // 마라케시 → 모로코
+        cityToCountry.put("QQS", "GB");  // 런던 세인트판크라스 → 영국
+        cityToCountry.put("SAW", "TR");  // 이스탄불 → 터키
+        cityToCountry.put("BOS", "US");  // 보스턴 → 미국
+        cityToCountry.put("CPH", "DK");  // 코펜하겐 → 덴마크
+        cityToCountry.put("PVG", "CN");  // 상하이 푸둥 → 중국
+        cityToCountry.put("XMN", "CN");  // 샤먼 → 중국
+        cityToCountry.put("FDF", "MQ");  // 포르드프랑스 → 마르티니크
+        cityToCountry.put("PTP", "GP");  // 푸앵타피트르 → 과들루프
+        cityToCountry.put("TFU", "CN");  // 청두 → 중국
+
+        // 추가 주요 도시들
+        cityToCountry.put("NRT", "JP");  // 도쿄 나리타
+        cityToCountry.put("HND", "JP");  // 도쿄 하네다
+        cityToCountry.put("ICN", "KR");  // 서울 인천
+        cityToCountry.put("GMP", "KR");  // 서울 김포
+        cityToCountry.put("BKK", "TH");  // 방콕
+        cityToCountry.put("SIN", "SG");  // 싱가포르
+        cityToCountry.put("DXB", "AE");  // 두바이
+        cityToCountry.put("SYD", "AU");  // 시드니
+        cityToCountry.put("AMS", "NL");  // 암스테르담
+        cityToCountry.put("LHR", "GB");  // 런던 히드로
+        cityToCountry.put("JFK", "US");  // 뉴욕 JFK
+        cityToCountry.put("LAX", "US");  // 로스앤젤레스
+
+        return cityToCountry.getOrDefault(cityCode, "Unknown");
+    }
+
+    /**
+     * 영문 텍스트를 한글로 번역
+     */
+    private String translateToKorean(String englishText) {
+        TextTranslationRequest request = new TextTranslationRequest();
+        request.setText(englishText);
+        request.setSourceLanguage("en");
+        request.setTargetLanguage("ko");
+
+        TranslationResponse response = translateService.translateText(request);
+        return response.getTranslatedText();
+    }
+
+    /**
+     * ISO 국가 코드를 한글 국가명으로 변환
+     * @param countryCode ISO 2자리 국가 코드 (예: ES, GB, IT)
+     * @return 한글 국가명
+     */
+    private String translateCountryCode(String countryCode) {
+        if (countryCode == null || countryCode.equals("Unknown")) {
+            return "Unknown";
+        }
+
+        // 1단계: 수동 매핑 확인 (가장 빠름)
+        Map<String, String> countryMap = getCountryMapping();
+        if (countryMap.containsKey(countryCode)) {
+            log.debug("국가 매핑 사용: {} -> {}", countryCode, countryMap.get(countryCode));
+            return countryMap.get(countryCode);
+        }
+
+        // 2단계: 매핑에 없으면 ISO 코드 → 영문 국가명 변환 후 번역
+        try {
+            String englishCountryName = getEnglishCountryName(countryCode);
+            if (englishCountryName != null && !englishCountryName.equals(countryCode)) {
+                String koreanCountryName = translateToKorean(englishCountryName);
+                log.info("국가 번역 완료: {} ({}) -> {}", countryCode, englishCountryName, koreanCountryName);
+                return koreanCountryName;
+            }
+        } catch (Exception e) {
+            log.warn("국가 번역 실패: {}", countryCode);
+        }
+
+        return "Unknown";
+    }
+
+    /**
+     * ISO 국가 코드 → 영문 국가명 변환
+     */
+    private String getEnglishCountryName(String countryCode) {
+        // Java의 Locale 클래스 활용
+        java.util.Locale locale = new java.util.Locale("", countryCode);
+        String englishName = locale.getDisplayCountry(java.util.Locale.ENGLISH);
+
+        // 유효한 국가명이면 반환
+        if (englishName != null && !englishName.isEmpty() && !englishName.equals(countryCode)) {
+            return englishName;
+        }
+
+        return countryCode;
+    }
+
+    /**
+     * 자주 사용되는 국가 코드 매핑 (캐시 역할)
+     */
+    private Map<String, String> getCountryMapping() {
+        Map<String, String> countryMap = new HashMap<>();
+
+        // 로그에서 확인된 국가들
+        countryMap.put("ES", "스페인");      // MAD, BCN
+        countryMap.put("GB", "영국");        // QQS
+        countryMap.put("TN", "튀니지");      // TUN
+        countryMap.put("PT", "포르투갈");    // OPO, LIS
+        countryMap.put("IT", "이탈리아");    // LIN, FCO
+        countryMap.put("MA", "모로코");      // RAK
+        countryMap.put("FR", "프랑스");      // CDG, ORY, XPG, XYD
+        countryMap.put("DE", "독일");        // FRA
+        countryMap.put("US", "미국");        // BOS
+        countryMap.put("TR", "터키");        // SAW
+        countryMap.put("CN", "중국");        // PVG, XMN
+        countryMap.put("DK", "덴마크");      // CPH
+        countryMap.put("MQ", "마르티니크");  // FDF
+        countryMap.put("GP", "과들루프");    // PTP
+
+        // 추가 주요 국가들
+        countryMap.put("JP", "일본");
+        countryMap.put("KR", "한국");
+        countryMap.put("TH", "태국");
+        countryMap.put("SG", "싱가포르");
+        countryMap.put("AE", "UAE");
+        countryMap.put("AU", "호주");
+        countryMap.put("NL", "네덜란드");
+        countryMap.put("CH", "스위스");
+        countryMap.put("AT", "오스트리아");
+        countryMap.put("GR", "그리스");
+        countryMap.put("HK", "홍콩");
+        countryMap.put("TW", "대만");
+        countryMap.put("ID", "인도네시아");
+        countryMap.put("OM", "오만");
+
+        return countryMap;
+    }
+
+    /**
+     * 공항명에서 도시명 추출 (개선 버전)
+     * Amadeus locations의 detailedName을 파싱하여 실제 도시명 반환
      */
     private String extractCityName(String detailedName, String cityCode) {
-        // "ADOLFO SUAREZ BARAJAS" 같은 공항명에서 도시명 추출
-        // 간단하게 첫 단어만 사용 (더 정교한 로직 필요 시 개선 가능)
+        if (detailedName == null || detailedName.isEmpty()) {
+            return cityCode;
+        }
 
-        // 공통 공항 키워드 제거
-        detailedName = detailedName
+        // 1단계: 공항 관련 키워드 제거
+        String cleaned = detailedName
                 .replace("INTL", "")
                 .replace("INTERNATIONAL", "")
                 .replace("AIRPORT", "")
                 .replace("RAIL STN", "")
                 .replace("RAILWAY STN", "")
+                .replace("RAILST", "")  // QQS (ST PANCRAS INTL RAILST)
                 .trim();
 
-        // 첫 단어 반환
-        String[] words = detailedName.split(" ");
-        return words.length > 0 ? words[0] : cityCode;
+        // 2단계: 공항명 → 도시명 매핑 테이블에서 확인
+        String[] words = cleaned.split(" ");
+        if (words.length > 0) {
+            String airportName = words[0];
+
+            // ✅ 공항명으로 도시 찾기
+            Map<String, String> airportToCity = getAirportToCityMapping();
+            if (airportToCity.containsKey(airportName)) {
+                String cityName = airportToCity.get(airportName);
+                log.debug("공항명 매핑 사용: {} ({}) -> {}", cityCode, airportName, cityName);
+                return cityName;
+            }
+
+            // 매핑에 없으면 첫 단어 그대로 반환
+            return airportName;
+        }
+
+        return cityCode;
+    }
+
+    /**
+     * 공항명 → 영문 도시명 매핑 테이블
+     * 로그에서 확인된 실제 Amadeus API 데이터 기반
+     */
+    private Map<String, String> getAirportToCityMapping() {
+        Map<String, String> mapping = new HashMap<>();
+
+        // ✅ 로그에서 확인된 실제 공항들
+        mapping.put("FIUMICINO", "ROME");              // FCO → 로마
+        mapping.put("ORLY", "PARIS");                  // ORY → 파리
+        mapping.put("CHARLES", "PARIS");               // CDG → 파리 (CHARLES DE GAULLE)
+        mapping.put("PUDONG", "SHANGHAI");             // PVG → 상하이
+        mapping.put("GARE", "PARIS");                  // XPG → 파리 (GARE DU NORD)
+        mapping.put("ST", "LONDON");                   // QQS → 런던 (ST PANCRAS)
+        mapping.put("FRANCISCO", "PORTO");             // OPO → 포르투 (FRANCISCO SA CARNEIRO)
+        mapping.put("LINATE", "MILAN");                // LIN → 밀라노
+        mapping.put("ADOLFO", "MADRID");               // MAD → 마드리드 (ADOLFO SUAREZ BARAJAS)
+        mapping.put("FRANKFURT", "FRANKFURT");         // FRA → 프랑크푸르트
+        mapping.put("KASTRUP", "COPENHAGEN");          // CPH → 코펜하겐
+        mapping.put("EDWARD", "BOSTON");               // BOS → 보스턴 (EDWARD L LOGAN)
+        mapping.put("SABIHA", "ISTANBUL");             // SAW → 이스탄불 (SABIHA GOKCEN)
+        mapping.put("MARTINIQUE", "FORT-DE-FRANCE");   // FDF → 포르드프랑스
+        mapping.put("CARTHAGE", "TUNIS");              // TUN → 튀니스
+        mapping.put("JOSEP", "BARCELONA");             // BCN → 바르셀로나 (JOSEP TARRADELLAS)
+        mapping.put("LE", "POINTE-A-PITRE");          // PTP → 푸앵타피트르 (LE RAIZET)
+        mapping.put("PART-DIEU", "LYON");             // XYD → 리옹 (PART-DIEU RAILWAY)
+        mapping.put("TIANFU", "CHENGDU");             // TFU → 청두
+        mapping.put("GAOQI", "XIAMEN");               // XMN → 샤먼
+        mapping.put("MENARA", "MARRAKECH");           // RAK → 마라케시
+
+        // 추가 주요 공항들
+        mapping.put("NARITA", "TOKYO");
+        mapping.put("HANEDA", "TOKYO");
+        mapping.put("HEATHROW", "LONDON");
+        mapping.put("GATWICK", "LONDON");
+        mapping.put("KENNEDY", "NEW YORK");
+        mapping.put("LAGUARDIA", "NEW YORK");
+        mapping.put("NEWARK", "NEW YORK");
+        mapping.put("BARAJAS", "MADRID");
+        mapping.put("SCHIPHOL", "AMSTERDAM");
+        mapping.put("CHANGI", "SINGAPORE");
+        mapping.put("INCHEON", "SEOUL");
+        mapping.put("GIMPO", "SEOUL");
+        mapping.put("SUVARNABHUMI", "BANGKOK");
+        mapping.put("HONGQIAO", "SHANGHAI");
+
+        return mapping;
     }
 
     /**
