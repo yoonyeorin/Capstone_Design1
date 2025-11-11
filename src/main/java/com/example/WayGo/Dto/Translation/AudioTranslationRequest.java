@@ -10,7 +10,7 @@ import lombok.*;
  * - audioContent: Base64 인코딩된 원본 오디오 바이트
  * - sourceLanguage: 원본 언어 코드 (null이면 자동 감지 시도)
  * - targetLanguage: 목표 언어 코드(필수)
- * - encoding, sampleRateHertz: STT 설정
+ * - encsoding, sampleRateHertz: STT 설정
  *
  * ※ JSON 기반 통일을 위해 Base64를 선택. 멀티파트 전송은 컨트롤러에서 별도 DTO로 확장 가능.
  */

@@ -1,81 +1,68 @@
 package com.example.WayGo.Exception;
 
-import com.example.WayGo.Constant.ErrorCode;
-import com.example.WayGo.Dto.Translation.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-/**
- * 전역 예외 처리 핸들러
- * 모든 Controller에서 발생하는 예외를 일관되게 처리
- */
-@Slf4j
+import java.util.HashMap;
+import java.util.Map;
+
 @RestControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
 
-    /**
-     * Validation 실패 시 (@Valid 검증 실패)
-     */
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ApiResponse<?> handleValidationException(MethodArgumentNotValidException e) {
-        FieldError fieldError = e.getBindingResult().getFieldError();
-        String message = fieldError != null ? fieldError.getDefaultMessage() : "입력값이 올바르지 않습니다";
+    public ResponseEntity<Map<String, String>> handleValidationExceptions(
+            MethodArgumentNotValidException ex) {
 
-        log.warn("Validation failed: {}", message);
-        return ApiResponse.error(ErrorCode.INVALID_REQUEST, message);
+        Map<String, String> errors = new HashMap<>();
+        ex.getBindingResult().getAllErrors().forEach((error) -> {
+            String fieldName = ((FieldError) error).getField();
+            String errorMessage = error.getDefaultMessage();
+            errors.put(fieldName, errorMessage);
+        });
+
+        log.error("Validation 오류: {}", errors);
+        return ResponseEntity.badRequest().body(errors);
     }
 
-    /**
-     * 커스텀 번역 예외 처리
-     */
-    @ExceptionHandler(TranslationException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ApiResponse<?> handleTranslationException(TranslationException e) {
-        log.error("Translation error: {} - {}", e.getErrorCode().getCode(), e.getMessage(), e);
-        return ApiResponse.error(e.getErrorCode(), e.getMessage());
+    @ExceptionHandler(InputNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleInputNotFoundException(
+            InputNotFoundException ex) {
+
+        Map<String, String> error = new HashMap<>();
+        error.put("error", "INPUT_NOT_FOUND");
+        error.put("message", ex.getMessage());
+
+        log.error("입력 조회 실패: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
     }
 
-    /**
-     * IllegalArgumentException 처리
-     */
-    @ExceptionHandler(IllegalArgumentException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ApiResponse<?> handleIllegalArgument(IllegalArgumentException e) {
-        log.warn("Invalid argument: {}", e.getMessage());
-        return ApiResponse.error(ErrorCode.INVALID_REQUEST, e.getMessage());
+    @ExceptionHandler(DateOverlapException.class)
+    public ResponseEntity<Map<String, String>> handleDateOverlapException(
+            DateOverlapException ex) {
+
+        Map<String, String> error = new HashMap<>();
+        error.put("error", "DATE_OVERLAP");
+        error.put("message", ex.getMessage());
+
+        log.error("날짜 겹침: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }
 
-    /**
-     * Google API 호출 실패 (네트워크 등)
-     */
-    @ExceptionHandler(com.google.api.gax.rpc.ApiException.class)
-    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-    public ApiResponse<?> handleGoogleApiException(com.google.api.gax.rpc.ApiException e) {
-        log.error("Google API error: {}", e.getMessage(), e);
-
-        // API 타입별로 에러 코드 분기
-        if (e.getStatusCode().getCode().getHttpStatusCode() == 401) {
-            return ApiResponse.error(ErrorCode.API_KEY_INVALID);
-        } else if (e.getStatusCode().getCode().getHttpStatusCode() == 429) {
-            return ApiResponse.error(ErrorCode.API_LIMIT_EXCEEDED);
-        }
-
-        return ApiResponse.error(ErrorCode.TRANSLATION_FAILED, e.getMessage());
-    }
-
-    /**
-     * 모든 예외의 최종 처리 (예상하지 못한 에러)
-     */
     @ExceptionHandler(Exception.class)
-    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-    public ApiResponse<?> handleGeneralException(Exception e) {
-        log.error("Unexpected error occurred: {}", e.getMessage(), e);
-        return ApiResponse.error(ErrorCode.UNKNOWN_ERROR);
+    public ResponseEntity<Map<String, String>> handleGeneralException(
+            Exception ex) {
+
+        Map<String, String> error = new HashMap<>();
+        error.put("error", "INTERNAL_SERVER_ERROR");
+        error.put("message", "서버 오류가 발생했습니다");
+
+        log.error("예상치 못한 오류", ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
     }
 }
