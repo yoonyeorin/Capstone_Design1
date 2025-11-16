@@ -1,106 +1,32 @@
 package com.example.WayGo.Dto.Itinerary;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
-import java.math.BigDecimal;
-import java.time.LocalTime;
-
-/**
- * 활동 상세 DTO
- *
- * 09:30  🏯 아사쿠사 센소지
- *        ├─ 체류: 1시간 30분
- *        └─ 입장료: 무료
- */
 @Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class ItineraryActivityDto {
 
-    /**
-     * 활동 ID
-     */
-    private Long activityId;
+    private Integer sequence;           // 하루 순서 (1~N)
 
-    /**
-     * 순서
-     */
-    private Integer sequence;
+    private String activityType;        // PLACE / MEAL / MOVE / HOTEL 등
 
-    /**
-     * 활동 타입 (PLACE, MEAL, ACCOMMODATION)
-     */
-    private String activityType;
+    private String name;                // 장소/식당/숙소 이름
+    private String address;             // 주소
 
-    /**
-     * 장소명
-     */
-    private String placeName;
+    private String startTime;           // 시작 시간 ("09:30")
+    private String endTime;             // 종료 시간 ("11:00")
+    private Integer durationMinutes;    // 활동 시간(분)
 
-    /**
-     * Google Place ID
-     */
-    private String placeId;
+    private String transportType;       // 이동 수단 (walk / bus / subway / taxi)
+    private Integer transportDuration;  // 이동 시간(분)
+    private Integer transportCost;      // 이동 비용(원)
 
-    /**
-     * 주소
-     */
-    private String address;
+    private Integer entranceFee;        // 입장료
+    private Integer mealCost;           // 식비
 
-    /**
-     * 시작 시간
-     */
-    @JsonFormat(pattern = "HH:mm")
-    private LocalTime startTime;
-
-    /**
-     * 종료 시간
-     */
-    @JsonFormat(pattern = "HH:mm")
-    private LocalTime endTime;
-
-    /**
-     * 체류 시간 (분)
-     */
-    private Integer durationMinutes;
-
-    /**
-     * 입장료
-     */
-    private Integer entranceFee;
-
-    /**
-     * 식비
-     */
-    private Integer mealCost;
-
-    /**
-     * 평점
-     */
-    private BigDecimal rating;
-
-    /**
-     * 다음 장소로 가는 교통수단
-     */
-    private String transportToNext;
-
-    /**
-     * 이동 시간 (분)
-     */
-    private Integer transportDuration;
-
-    /**
-     * 이동 비용
-     */
-    private Integer transportCost;
-
-    /**
-     * 꿀팁
-     */
-    private String tips;
+    private Double rating;              // 구글 평점
+    private String tip;                 // 관람 팁 / 여유시간 팁
 }
