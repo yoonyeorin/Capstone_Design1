@@ -170,6 +170,7 @@ public class PostService {
                 .title(post.getTitle())
                 .contentPreview(contentPreview)
                 .authorNickname(post.getAuthor().getNickname())
+                .authorProfileImageUrl(post.getAuthor().getProfileImageUrl()) // ✅ 추가
                 .viewCount(post.getViewCount())
                 .likeCount(post.getLikeCount())
                 .commentCount(post.getCommentCount())
