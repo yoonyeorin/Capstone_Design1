@@ -111,6 +111,12 @@ public class LikeService {
                 ? post.getContent().substring(0, 100) + "..."
                 : post.getContent();
 
+        // ✅ 첫 번째 이미지를 썸네일로 사용
+        String thumbnailUrl = null;
+        if (post.getImageUrls() != null && !post.getImageUrls().isEmpty()) {
+            thumbnailUrl = post.getImageUrls().get(0);
+        }
+
         return LikedPostResponse.builder()
                 .postId(post.getId())
                 .title(post.getTitle())
@@ -120,6 +126,7 @@ public class LikeService {
                 .likeCount(post.getLikeCount())
                 .commentCount(post.getCommentCount())
                 .viewCount(post.getViewCount())
+                .thumbnailUrl(thumbnailUrl) // ✅ 썸네일 URL 추가
                 .postCreatedAt(post.getCreatedAt())
                 .likedAt(like.getCreatedAt())
                 .build();

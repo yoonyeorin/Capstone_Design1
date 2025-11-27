@@ -20,6 +20,7 @@ public class CommentResponse {
     private String content;
     private String authorNickname;
     private Long authorId;
+    private String authorProfileImageUrl; // ✅ 추가
     private Long postId;
     private Long parentId; // 부모 댓글 ID (답글인 경우)
     private Boolean isDeleted;

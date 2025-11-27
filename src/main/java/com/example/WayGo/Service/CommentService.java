@@ -170,13 +170,14 @@ public class CommentService {
                 .content(comment.getContent())
                 .authorNickname(comment.getAuthor().getNickname())
                 .authorId(comment.getAuthor().getId())
+                .authorProfileImageUrl(comment.getAuthor().getProfileImageUrl()) // ✅ 추가
                 .postId(comment.getPost().getId())
                 .parentId(comment.getParent() != null ? comment.getParent().getId() : null)
                 .isDeleted(comment.getIsDeleted())
                 .isAuthor(currentUserId != null && comment.getAuthor().getId().equals(currentUserId))
                 .createdAt(comment.getCreatedAt())
                 .updatedAt(comment.getUpdatedAt())
-                .replies(null) // 나중에 설정
+                .replies(null)
                 .replyCount(0)
                 .build();
     }

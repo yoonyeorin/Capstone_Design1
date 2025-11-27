@@ -19,6 +19,7 @@ public class PostListResponse {
     private String title;
     private String contentPreview;
     private String authorNickname;
+    private String authorProfileImageUrl; // ✅ 추가
     private Long viewCount;
     private Long likeCount;
     private Long commentCount;

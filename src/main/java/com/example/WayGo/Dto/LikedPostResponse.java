@@ -22,6 +22,7 @@ public class LikedPostResponse {
     private Long likeCount;
     private Long commentCount;
     private Long viewCount;
+    private String thumbnailUrl; // ✅ 이 한 줄 추가!
     private LocalDateTime postCreatedAt;
     private LocalDateTime likedAt; // 좋아요 누른 시간
 }

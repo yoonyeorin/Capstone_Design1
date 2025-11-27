@@ -534,7 +534,9 @@ public class UserController {
                     "nickname", user.getNickname(),
                     "email", user.getEmail(),
                     "emailVerified", user.getEmailVerified(),
-                    "role", user.getRole().toString()
+                    "role", user.getRole().toString(),
+                    "profileImageUrl", user.getProfileImageUrl() != null ? user.getProfileImageUrl() : "",
+                    "backgroundImageUrl", user.getBackgroundImageUrl() != null ? user.getBackgroundImageUrl() : ""
             ));
 
             return ResponseEntity.ok(userInfo);
