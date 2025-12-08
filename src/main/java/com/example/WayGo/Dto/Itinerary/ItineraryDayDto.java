@@ -21,5 +21,7 @@ public class ItineraryDayDto {
     private Integer dailyBudget;        // 하루 예산
     private Integer dailySpent;         // 하루 지출
 
-    private List<ItineraryActivityDto> activities;  // 활동 전체 리스트
+    private String dayText; //전체내용
+
+    private List<ItineraryActivityDto> activities;
 }
