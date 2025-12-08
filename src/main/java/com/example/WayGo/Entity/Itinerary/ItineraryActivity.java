@@ -67,4 +67,10 @@ public class ItineraryActivity {
     // 활동별 TIP (여유시간, 추천 포인트 등)
     @Column(length = 1000)
     private String tip;
+
+    /** ⭐ OpenAI JSON에 포함되는 예상 비용 */
+    private Integer expectedCost;
+
+    private Double lat;
+    private Double lng;
 }

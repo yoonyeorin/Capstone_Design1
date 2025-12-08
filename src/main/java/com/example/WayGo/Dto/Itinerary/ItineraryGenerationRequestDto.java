@@ -1,10 +1,13 @@
 package com.example.WayGo.Dto.Itinerary;
 
+import com.example.WayGo.Entity.enums.ScheduleDensity;
 import lombok.*;
 
 import java.util.List;
 
-/** 일정 생성 요청 DTO */
+/**
+ * 일정 생성 요청 DTO (Step1~8 전체 포함)
+ */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -12,15 +15,20 @@ import java.util.List;
 @Builder
 public class ItineraryGenerationRequestDto {
 
-    private String destinationCity;      // 여행 도시 ("도쿄")
-    private String startDate;            // 여행 시작일 ("2025-11-09")
-    private String endDate;              // 여행 종료일 ("2025-11-11")
+    private String destinationCity;
+    private String startDate;
+    private String endDate;
+    private Boolean hasTransportTicket;
+    private String expectedArrivalTime;
+    private String expectedReturnTime;
+    private Integer travelers;
+    private List<String> transportTypes;
+    private List<String> travelStyles;
+    private ScheduleDensity scheduleDensity;
+    private Integer budget;
+    private Boolean needsHotel;
+    private Integer hotelBudget;
 
-    private String arrivalTime;          // 첫날 도착 시간 ("09:00")
-    private String scheduleDensity;      // RELAXED / PACKED
-
-    private List<String> travelStyles;   // 여행 스타일 ["FOOD", "CULTURE"]
-
-    private Integer budget;              // 전체 예산
-    private Boolean needsHotel;          // 숙소 추천 여부
+    private Double destLat;
+    private Double destLng;
 }
