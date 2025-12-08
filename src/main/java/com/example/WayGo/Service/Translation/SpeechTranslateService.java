@@ -1,58 +1,76 @@
 package com.example.WayGo.Service.Translation;
 
 import com.example.WayGo.Constant.ErrorCode;
-import com.example.WayGo.Dto.Translation.*;
+import com.example.WayGo.Dto.Translation.AudioEncodingType;
+import com.example.WayGo.Dto.Translation.AudioTranslationResponse;
 import com.example.WayGo.Exception.TranslationException;
 import com.google.api.gax.rpc.ApiException;
 import com.google.cloud.speech.v1.*;
-import com.google.cloud.translate.v3.*;
 import com.google.cloud.translate.v3.LocationName;
+import com.google.cloud.translate.v3.TranslateTextRequest;
+import com.google.cloud.translate.v3.TranslateTextResponse;
+import com.google.cloud.translate.v3.TranslationServiceClient;
 import com.google.protobuf.ByteString;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.Base64;
-
 @Slf4j
 @Service
-@RequiredArgsConstructor  // final 필드들을 생성자 주입
+@RequiredArgsConstructor
 public class SpeechTranslateService {
 
     private final SpeechClient speechClient;
     private final TranslationServiceClient translationClient;
     private final String gcpProjectId;
+    private final LanguageMappingService languageMappingService;
 
     /**
-     * 오디오(Base64) → STT → 번역
+     * 오디오(byte[]) → STT → 번역
      *
-     * @param req 오디오 번역 요청
-     * @return 음성 인식 결과 + 번역 결과
-     * @throws TranslationException STT 또는 번역 실패 시
+     * @param audioBytes 녹음 파일 바이트
+     * @param sourceLanguageClient 프론트에서 온 언어값(예: "한국어", "영어", "ko-KR" 등)
+     * @param targetLanguageClient 프론트에서 온 언어값(예: "영어", "en")
      */
-    public AudioTranslationResponse translateAudio(AudioTranslationRequest req) {
+    public AudioTranslationResponse translateAudio(
+            byte[] audioBytes,
+            String sourceLanguageClient,
+            String targetLanguageClient,
+            AudioEncodingType encoding,
+            Integer sampleRateHertz,
+            Boolean enableAutomaticPunctuation
+    ) {
 
         try {
-            // ========== 1단계: Base64 디코딩 ==========
-            byte[] audioBytes;
-            try {
-                audioBytes = Base64.getDecoder().decode(req.getAudioContent());
-                log.info("Audio decoded successfully: {} bytes", audioBytes.length);
-            } catch (IllegalArgumentException e) {
-                throw new TranslationException(ErrorCode.INVALID_REQUEST,
-                        "잘못된 Base64 형식입니다", e);
+            // ========== 1단계: 입력 검증 ==========
+            if (audioBytes == null || audioBytes.length == 0) {
+                throw new TranslationException(
+                        ErrorCode.INVALID_REQUEST,
+                        "오디오 데이터가 비어 있습니다"
+                );
             }
 
+            if (sampleRateHertz == null || sampleRateHertz < 8000) {
+                throw new TranslationException(
+                        ErrorCode.INVALID_REQUEST,
+                        "유효하지 않은 샘플링 레이트입니다"
+                );
+            }
+
+            // 프론트 값 → 실제 코드로 변환
+            String sttLanguageCode = languageMappingService.toSpeechCode(sourceLanguageClient);
+            String targetLanguage = languageMappingService.toTranslateCode(targetLanguageClient);
+
             ByteString audioByteString = ByteString.copyFrom(audioBytes);
+            log.info("Audio length: {} bytes", audioBytes.length);
 
             // ========== 2단계: RecognitionConfig 구성 ==========
             RecognitionConfig.Builder configBuilder = RecognitionConfig.newBuilder()
-                    .setLanguageCode(req.getSourceLanguage())
-                    .setEncoding(mapEncoding(req.getEncoding()))
-                    .setSampleRateHertz(req.getSampleRateHertz());
+                    .setLanguageCode(sttLanguageCode)
+                    .setEncoding(mapEncoding(encoding))
+                    .setSampleRateHertz(sampleRateHertz);
 
-
-            if (Boolean.TRUE.equals(req.getEnableAutomaticPunctuation())) {
+            if (Boolean.TRUE.equals(enableAutomaticPunctuation)) {
                 configBuilder.setEnableAutomaticPunctuation(true);
             }
 
@@ -69,8 +87,7 @@ public class SpeechTranslateService {
                     .setAudio(audio)
                     .build();
 
-            log.info("STT request: language={}, encoding={}",
-                    req.getSourceLanguage(), req.getEncoding());
+            log.info("STT request: language={}, encoding={}", sttLanguageCode, encoding);
 
             RecognizeResponse sttResponse = speechClient.recognize(sttRequest);
 
@@ -79,15 +96,16 @@ public class SpeechTranslateService {
             for (SpeechRecognitionResult result : sttResponse.getResultsList()) {
                 if (result.getAlternativesCount() > 0) {
                     SpeechRecognitionAlternative alt = result.getAlternatives(0);
-                    transcriptBuilder.append(alt.getTranscript());
-                    transcriptBuilder.append(" ");
+                    transcriptBuilder.append(alt.getTranscript()).append(" ");
                 }
             }
             String transcript = transcriptBuilder.toString().trim();
 
             if (transcript.isEmpty()) {
-                throw new TranslationException(ErrorCode.TRANSLATION_FAILED,
-                        "음성에서 텍스트를 추출할 수 없습니다");
+                throw new TranslationException(
+                        ErrorCode.TRANSLATION_FAILED,
+                        "음성에서 텍스트를 추출할 수 없습니다"
+                );
             }
 
             log.info("STT successful: transcriptLength={}", transcript.length());
@@ -99,16 +117,19 @@ public class SpeechTranslateService {
             TranslateTextRequest translateRequest = TranslateTextRequest.newBuilder()
                     .setParent(parent.toString())
                     .setMimeType("text/plain")
-                    .setTargetLanguageCode(req.getTargetLanguage())
+                    .setTargetLanguageCode(targetLanguage)
                     .addContents(transcript)
                     .build();
 
-            log.info("Translation request: target={}", req.getTargetLanguage());
+            log.info("Translation request: target={}", targetLanguage);
 
             TranslateTextResponse translateResponse = translationClient.translateText(translateRequest);
 
             if (translateResponse.getTranslationsCount() == 0) {
-                throw new TranslationException(ErrorCode.TRANSLATION_FAILED, "번역 결과가 없습니다");
+                throw new TranslationException(
+                        ErrorCode.TRANSLATION_FAILED,
+                        "번역 결과가 없습니다"
+                );
             }
 
             String translated = translateResponse.getTranslations(0).getTranslatedText();
@@ -122,8 +143,11 @@ public class SpeechTranslateService {
 
         } catch (ApiException e) {
             log.error("Google API error during audio translation: {}", e.getMessage(), e);
-            throw new TranslationException(ErrorCode.TRANSLATION_FAILED,
-                    "음성 번역 중 API 오류가 발생했습니다: " + e.getMessage(), e);
+            throw new TranslationException(
+                    ErrorCode.TRANSLATION_FAILED,
+                    "음성 번역 중 API 오류가 발생했습니다: " + e.getMessage(),
+                    e
+            );
         } catch (TranslationException e) {
             throw e;
         } catch (Exception e) {

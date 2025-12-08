@@ -13,6 +13,6 @@ public class SwaggerConfig {
                 .info(new Info()
                         .title("WayGo API") // 제목 변경
                         .version("v1.0.0")
-                        .description("여행 커뮤니티 API - 사용자 관리, 게시글, 좋아요 기능")); // 설명 업데이트
+                        .description("윤줌이와 윤려린의 쌈뽕한 api 테스트")); // 설명 업데이트
     }
 }

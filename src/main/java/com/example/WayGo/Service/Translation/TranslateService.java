@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 public class TranslateService {
 
     private final TranslationServiceClient translationClient;
+    private final LanguageMappingService languageMappingService;
 
     @Value("${google.cloud.project-id}")
     private String projectId;
@@ -30,45 +31,44 @@ public class TranslateService {
      */
     public TranslationResponse translateText(TextTranslationRequest request) {
 
-        // ========== 1단계: Request에서 데이터 꺼내기 ==========
+        // 1) Request 데이터
         String text = request.getText();                        // "안녕하세요"
-        String sourceLanguage = request.getSourceLanguage();    // "ko" 또는 null
-        String targetLanguage = request.getTargetLanguage();    // "en"
+        String sourceLanguageClient = request.getSourceLanguage();    // "한국어" or "ko" or null
+        String targetLanguageClient = request.getTargetLanguage();    // "영어" or "en"
 
+        // 2) 언어 코드 매핑
+        // targetLanguage는 필수
+        String targetLanguage = languageMappingService.toTranslateCode(targetLanguageClient);
 
-        // ========== 2단계: Google API 위치 설정 ==========
+        // sourceLanguage는 선택(없으면 자동 감지)
+        String sourceLanguage = null;
+        if (sourceLanguageClient != null && !sourceLanguageClient.isBlank()) {
+            sourceLanguage = languageMappingService.toTranslateCode(sourceLanguageClient);
+        }
+
+        // 3) Google API 위치 설정
         String location = "global";
         LocationName parent = LocationName.of(projectId, location);
-        // 결과: "projects/onyx-pad-458806/locations/global"
 
-
-        // ========== 3단계: 번역 요청 객체 만들기 ==========
+        // 4) 번역 요청 객체
         TranslateTextRequest.Builder requestBuilder = TranslateTextRequest.newBuilder()
-                .setParent(parent.toString())              // 위치 설정
-                .setMimeType("text/plain")                 // 텍스트 타입
-                .setTargetLanguageCode(targetLanguage)     // 목표 언어: "en"
-                .addContents(text);                        // 번역할 텍스트
+                .setParent(parent.toString())
+                .setMimeType("text/plain")
+                .setTargetLanguageCode(targetLanguage)
+                .addContents(text);
 
-        // 원본 언어가 있으면 추가 (없으면 자동 감지)
-        if (sourceLanguage != null && !sourceLanguage.isEmpty()) {
+        if (sourceLanguage != null) {
             requestBuilder.setSourceLanguageCode(sourceLanguage);
         }
 
         TranslateTextRequest translateRequest = requestBuilder.build();
 
-
-        // ========== 4단계: Google API 호출 (진짜 번역!) ==========
+        // 5) Google API 호출
         TranslateTextResponse response = translationClient.translateText(translateRequest);
-        // 네트워크 통신 발생!
-        // Google 서버에 요청 보내고 응답 받기
 
-
-        // ========== 5단계: 결과 추출 ==========
+        // 6) 결과 추출
         String translatedText = response.getTranslations(0).getTranslatedText();
-        // Google이 보내준 번역 결과: "Hello"
 
-
-        // ========== 6단계: Response DTO 만들어서 반환 ==========
         return TranslationResponse.builder()
                 .translatedText(translatedText)
                 .build();
